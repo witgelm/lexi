@@ -3,13 +3,19 @@
  *
  * We use the classic `window.Telegram.WebApp` object (loaded via the script in
  * index.html) for lifecycle + CloudStorage, which is the most stable surface.
- * `ready()` tells Telegram the app has rendered; `expand()` uses full height.
+ * `ready()` tells Telegram the app has rendered; `expand()` uses full height;
+ * `requestFullscreen()` (Bot API 8.0+) goes immersive on mobile clients.
  */
 type WebApp = {
   ready: () => void
   expand: () => void
   colorScheme?: 'light' | 'dark'
   showAlert?: (message: string, cb?: () => void) => void
+  // Fullscreen API — Bot API 8.0+, absent on older clients.
+  requestFullscreen?: () => void
+  exitFullscreen?: () => void
+  isFullscreen?: boolean
+  onEvent?: (event: string, handler: (payload?: { error?: string }) => void) => void
   HapticFeedback?: {
     impactOccurred: (style: 'light' | 'medium' | 'heavy') => void
     notificationOccurred: (type: 'error' | 'success' | 'warning') => void
@@ -25,6 +31,19 @@ export function initTelegram(): void {
   if (!wa) return // running in a plain browser (dev)
   wa.ready()
   wa.expand()
+
+  // Go fullscreen on supported (mobile) clients. On desktop/older clients the
+  // method is missing or fires `fullscreenFailed` — we just stay expanded.
+  if (typeof wa.requestFullscreen === 'function') {
+    wa.onEvent?.('fullscreenFailed', () => {
+      /* unsupported (e.g. desktop) — ignore, expand() already applied */
+    })
+    try {
+      wa.requestFullscreen()
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export function colorScheme(): 'light' | 'dark' {
