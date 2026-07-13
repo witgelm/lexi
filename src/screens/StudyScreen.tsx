@@ -18,7 +18,6 @@ export function StudyScreen({
   const decks = useStore((s) => s.decks)
   const wordsMap = useStore((s) => s.words)
   const reviewsMap = useStore((s) => s.reviews)
-  const newLimit = useStore((s) => s.newLimit)
   const loadDeck = useStore((s) => s.loadDeck)
   const ensureAllLoaded = useStore((s) => s.ensureAllLoaded)
   const gradeCard = useStore((s) => s.gradeCard)
@@ -47,7 +46,7 @@ export function StudyScreen({
     if (deckId) {
       const words = wordsMap[deckId]
       const reviews = reviewsMap[deckId]
-      if (words != null && reviews != null) setQueue(buildQueue(words, reviews, now, newLimit))
+      if (words != null && reviews != null) setQueue(buildQueue(words, reviews, now))
     } else {
       const allReady = decks.every((d) => wordsMap[d.id] != null && reviewsMap[d.id] != null)
       if (allReady) {
@@ -55,10 +54,10 @@ export function StudyScreen({
           words: wordsMap[d.id] ?? [],
           reviews: reviewsMap[d.id] ?? [],
         }))
-        setQueue(buildGlobalQueue(data, now, newLimit))
+        setQueue(buildGlobalQueue(data, now))
       }
     }
-  }, [queue, deckId, decks, wordsMap, reviewsMap, newLimit])
+  }, [queue, deckId, decks, wordsMap, reviewsMap])
 
   const current = queue?.[pos] ?? null
   const total = queue?.length ?? 0

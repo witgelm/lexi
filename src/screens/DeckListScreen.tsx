@@ -20,8 +20,6 @@ export function DeckListScreen({ navigate }: { navigate: (r: Route) => void }) {
   const loadPreset = useStore((s) => s.loadPreset)
   const wordsMap = useStore((s) => s.words)
   const reviewsMap = useStore((s) => s.reviews)
-  const newLimit = useStore((s) => s.newLimit)
-  const setNewLimit = useStore((s) => s.setNewLimit)
   const ensureAllLoaded = useStore((s) => s.ensureAllLoaded)
 
   const [title, setTitle] = useState('')
@@ -42,8 +40,8 @@ export function DeckListScreen({ navigate }: { navigate: (r: Route) => void }) {
       words: wordsMap[d.id] ?? [],
       reviews: reviewsMap[d.id] ?? [],
     }))
-    return globalStats(data, new Date(), newLimit)
-  }, [allLoaded, decks, wordsMap, reviewsMap, newLimit])
+    return globalStats(data, new Date())
+  }, [allLoaded, decks, wordsMap, reviewsMap])
 
   const toStudy = today ? today.due + today.fresh : 0
 
@@ -142,30 +140,6 @@ export function DeckListScreen({ navigate }: { navigate: (r: Route) => void }) {
               Создать колоду
             </Button>
           </div>
-        </Section>
-
-        <Section
-          header="Настройки"
-          footer="Сколько новых слов в день показывать во всей общей сессии"
-        >
-          <Cell
-            subtitle="новых слов в день"
-            after={
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Button size="s" mode="bezeled" onClick={() => void setNewLimit(newLimit - 5)}>
-                  −5
-                </Button>
-                <span style={{ minWidth: 24, textAlign: 'center', fontWeight: 600 }}>
-                  {newLimit}
-                </span>
-                <Button size="s" mode="bezeled" onClick={() => void setNewLimit(newLimit + 5)}>
-                  +5
-                </Button>
-              </div>
-            }
-          >
-            Лимит новых
-          </Cell>
         </Section>
       </List>
     </div>

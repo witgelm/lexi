@@ -1,11 +1,9 @@
 import { create } from 'zustand'
 import type { Deck, Review, Word } from '@/domain/types'
 import type { PresetDeck } from '@/data/greekStarter'
-import { decksRepo, genId, reviewsRepo, settingsRepo, wordsRepo } from '@/storage/repositories'
+import { decksRepo, genId, reviewsRepo, wordsRepo } from '@/storage/repositories'
 import { grade as gradeReview, newReview } from '@/srs/srs'
 import type { Grade } from 'ts-fsrs'
-
-const DEFAULT_NEW_LIMIT = 20
 
 interface State {
   decks: Deck[]
@@ -26,8 +24,6 @@ interface State {
   gradeCard: (deckId: string, cardId: string, g: Grade) => Promise<void>
   /** Ensures every deck's words/reviews are loaded (for the global session). */
   ensureAllLoaded: () => Promise<void>
-  newLimit: number
-  setNewLimit: (n: number) => Promise<void>
 }
 
 export const useStore = create<State>((set, get) => ({
@@ -35,21 +31,11 @@ export const useStore = create<State>((set, get) => ({
   loading: true,
   words: {},
   reviews: {},
-  newLimit: DEFAULT_NEW_LIMIT,
 
   async loadDecks() {
     set({ loading: true })
-    const [decks, settings] = await Promise.all([
-      decksRepo.list(),
-      settingsRepo.load({ newLimit: DEFAULT_NEW_LIMIT }),
-    ])
-    set({ decks, newLimit: settings.newLimit, loading: false })
-  },
-
-  async setNewLimit(n) {
-    const clamped = Math.max(0, Math.min(200, Math.round(n)))
-    await settingsRepo.save({ newLimit: clamped })
-    set({ newLimit: clamped })
+    const decks = await decksRepo.list()
+    set({ decks, loading: false })
   },
 
   async ensureAllLoaded() {

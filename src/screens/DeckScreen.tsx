@@ -14,7 +14,6 @@ export function DeckScreen({
   const deck = useStore((s) => s.decks.find((d) => d.id === deckId))
   const words = useStore((s) => s.words[deckId])
   const reviews = useStore((s) => s.reviews[deckId])
-  const newLimit = useStore((s) => s.newLimit)
   const loadDeck = useStore((s) => s.loadDeck)
   const deleteDeck = useStore((s) => s.deleteDeck)
 
@@ -24,8 +23,8 @@ export function DeckScreen({
 
   const stats = useMemo(() => {
     if (!words || !reviews) return null
-    return deckStats(words, reviews, new Date(), newLimit)
-  }, [words, reviews, newLimit])
+    return deckStats(words, reviews, new Date())
+  }, [words, reviews])
 
   if (!deck) {
     return (

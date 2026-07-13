@@ -31,17 +31,12 @@ function dueOldest(items: StudyItem[], now: Date): StudyItem[] {
 
 /**
  * Builds today's queue for a single deck: due review cards first (most
- * overdue first), then up to `newLimit` previously-unseen cards.
+ * overdue first), then all previously-unseen cards. No daily new-card cap.
  */
-export function buildQueue(
-  words: Word[],
-  reviews: Review[],
-  now: Date,
-  newLimit: number,
-): StudyItem[] {
+export function buildQueue(words: Word[], reviews: Review[], now: Date): StudyItem[] {
   const items = pair(words, reviews)
   const dueOld = dueOldest(items, now)
-  const fresh = items.filter((it) => isNew(it.review)).slice(0, newLimit)
+  const fresh = items.filter((it) => isNew(it.review))
   return [...dueOld, ...fresh]
 }
 
@@ -49,12 +44,12 @@ export function buildQueue(
  * Round-robin interleave: takes one item from each list in turn so new words
  * from different decks are mixed rather than grouped deck-by-deck.
  */
-function interleave<T>(lists: T[][], limit: number): T[] {
+function interleave<T>(lists: T[][]): T[] {
   const out: T[] = []
   const maxLen = Math.max(0, ...lists.map((l) => l.length))
-  for (let i = 0; i < maxLen && out.length < limit; i++) {
+  for (let i = 0; i < maxLen; i++) {
     for (const list of lists) {
-      if (i < list.length && out.length < limit) out.push(list[i])
+      if (i < list.length) out.push(list[i])
     }
   }
   return out
@@ -62,16 +57,16 @@ function interleave<T>(lists: T[][], limit: number): T[] {
 
 /**
  * Builds a cross-deck session across all decks: every due review card
- * (globally sorted by how overdue it is), then up to `newLimit` new cards
- * interleaved round-robin across decks so themes are mixed.
+ * (globally sorted by how overdue it is), then all new cards interleaved
+ * round-robin across decks so themes are mixed. No daily new-card cap.
  */
-export function buildGlobalQueue(decks: DeckData[], now: Date, newLimit: number): StudyItem[] {
+export function buildGlobalQueue(decks: DeckData[], now: Date): StudyItem[] {
   const perDeck = decks.map((d) => pair(d.words, d.reviews))
 
   const dueOld = dueOldest(perDeck.flat(), now)
 
   const freshByDeck = perDeck.map((items) => items.filter((it) => isNew(it.review)))
-  const fresh = interleave(freshByDeck, newLimit)
+  const fresh = interleave(freshByDeck)
 
   return [...dueOld, ...fresh]
 }
@@ -90,16 +85,11 @@ function statsFromQueue(total: number, q: StudyItem[]): DeckStats {
   }
 }
 
-export function deckStats(
-  words: Word[],
-  reviews: Review[],
-  now: Date,
-  newLimit: number,
-): DeckStats {
-  return statsFromQueue(words.length, buildQueue(words, reviews, now, newLimit))
+export function deckStats(words: Word[], reviews: Review[], now: Date): DeckStats {
+  return statsFromQueue(words.length, buildQueue(words, reviews, now))
 }
 
-export function globalStats(decks: DeckData[], now: Date, newLimit: number): DeckStats {
+export function globalStats(decks: DeckData[], now: Date): DeckStats {
   const total = decks.reduce((n, d) => n + d.words.length, 0)
-  return statsFromQueue(total, buildGlobalQueue(decks, now, newLimit))
+  return statsFromQueue(total, buildGlobalQueue(decks, now))
 }
