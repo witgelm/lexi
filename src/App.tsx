@@ -8,7 +8,8 @@ import { AddWordsScreen } from '@/screens/AddWordsScreen'
 export type Route =
   | { name: 'decks' }
   | { name: 'deck'; deckId: string }
-  | { name: 'study'; deckId: string }
+  // deckId: null means a cross-deck "study everything due today" session.
+  | { name: 'study'; deckId: string | null }
   | { name: 'add'; deckId: string }
 
 export function App() {

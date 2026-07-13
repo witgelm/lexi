@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Deck, Review, Word } from '@/domain/types'
 import type { PresetDeck } from '@/data/greekStarter'
-import { decksRepo, genId, reviewsRepo, wordsRepo } from '@/storage/repositories'
+import { decksRepo, genId, reviewsRepo, settingsRepo, wordsRepo } from '@/storage/repositories'
 import { grade as gradeReview, newReview } from '@/srs/srs'
 import type { Grade } from 'ts-fsrs'
 
@@ -24,7 +24,10 @@ interface State {
     entries: Array<{ front: string; back: string; transcription?: string; example?: string }>,
   ) => Promise<void>
   gradeCard: (deckId: string, cardId: string, g: Grade) => Promise<void>
+  /** Ensures every deck's words/reviews are loaded (for the global session). */
+  ensureAllLoaded: () => Promise<void>
   newLimit: number
+  setNewLimit: (n: number) => Promise<void>
 }
 
 export const useStore = create<State>((set, get) => ({
@@ -36,8 +39,24 @@ export const useStore = create<State>((set, get) => ({
 
   async loadDecks() {
     set({ loading: true })
-    const decks = await decksRepo.list()
-    set({ decks, loading: false })
+    const [decks, settings] = await Promise.all([
+      decksRepo.list(),
+      settingsRepo.load({ newLimit: DEFAULT_NEW_LIMIT }),
+    ])
+    set({ decks, newLimit: settings.newLimit, loading: false })
+  },
+
+  async setNewLimit(n) {
+    const clamped = Math.max(0, Math.min(200, Math.round(n)))
+    await settingsRepo.save({ newLimit: clamped })
+    set({ newLimit: clamped })
+  },
+
+  async ensureAllLoaded() {
+    const { decks, words } = get()
+    await Promise.all(
+      decks.filter((d) => words[d.id] == null).map((d) => get().loadDeck(d.id)),
+    )
   },
 
   async createDeck(title, langFrom, langTo) {

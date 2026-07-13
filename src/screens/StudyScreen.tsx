@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Card, List, Section, Placeholder, Progress } from '@telegram-apps/telegram-ui'
 import { useStore } from '@/store/useStore'
-import { buildQueue, type StudyItem } from '@/srs/queue'
+import { buildGlobalQueue, buildQueue, type StudyItem } from '@/srs/queue'
 import { RATINGS } from '@/srs/srs'
 import { haptic, hapticSuccess } from '@/telegram/init'
 import type { Grade } from 'ts-fsrs'
@@ -11,13 +11,16 @@ export function StudyScreen({
   deckId,
   navigate,
 }: {
-  deckId: string
+  // null → cross-deck "study everything due today" session.
+  deckId: string | null
   navigate: (r: Route) => void
 }) {
-  const words = useStore((s) => s.words[deckId])
-  const reviews = useStore((s) => s.reviews[deckId])
+  const decks = useStore((s) => s.decks)
+  const wordsMap = useStore((s) => s.words)
+  const reviewsMap = useStore((s) => s.reviews)
   const newLimit = useStore((s) => s.newLimit)
   const loadDeck = useStore((s) => s.loadDeck)
+  const ensureAllLoaded = useStore((s) => s.ensureAllLoaded)
   const gradeCard = useStore((s) => s.gradeCard)
 
   // Freeze the queue when the session starts so grading doesn't reshuffle it.
@@ -26,26 +29,47 @@ export function StudyScreen({
   const [revealed, setRevealed] = useState(false)
   const [done, setDone] = useState(0)
 
-  useEffect(() => {
-    if (words == null || reviews == null) void loadDeck(deckId)
-  }, [deckId, words, reviews, loadDeck])
+  const backRoute: Route = deckId ? { name: 'deck', deckId } : { name: 'decks' }
 
+  // Ensure the needed decks are loaded.
   useEffect(() => {
-    if (queue == null && words != null && reviews != null) {
-      setQueue(buildQueue(words, reviews, new Date(), newLimit))
+    if (deckId) {
+      if (wordsMap[deckId] == null) void loadDeck(deckId)
+    } else {
+      void ensureAllLoaded()
     }
-  }, [queue, words, reviews, newLimit])
+  }, [deckId, wordsMap, loadDeck, ensureAllLoaded])
+
+  // Build the frozen queue once the data is ready.
+  useEffect(() => {
+    if (queue != null) return
+    const now = new Date()
+    if (deckId) {
+      const words = wordsMap[deckId]
+      const reviews = reviewsMap[deckId]
+      if (words != null && reviews != null) setQueue(buildQueue(words, reviews, now, newLimit))
+    } else {
+      const allReady = decks.every((d) => wordsMap[d.id] != null && reviewsMap[d.id] != null)
+      if (allReady) {
+        const data = decks.map((d) => ({
+          words: wordsMap[d.id] ?? [],
+          reviews: reviewsMap[d.id] ?? [],
+        }))
+        setQueue(buildGlobalQueue(data, now, newLimit))
+      }
+    }
+  }, [queue, deckId, decks, wordsMap, reviewsMap, newLimit])
 
   const current = queue?.[pos] ?? null
   const total = queue?.length ?? 0
   const progress = total > 0 ? Math.round((done / total) * 100) : 0
-
   const finished = useMemo(() => queue != null && pos >= total, [queue, pos, total])
 
   async function onGrade(g: Grade) {
     if (!current) return
     haptic('light')
-    await gradeCard(deckId, current.word.id, g)
+    // Grade against the card's own deck — cards may come from several decks.
+    await gradeCard(current.word.deckId, current.word.id, g)
     setDone((d) => d + 1)
     setRevealed(false)
     setPos((p) => p + 1)
@@ -59,6 +83,21 @@ export function StudyScreen({
     )
   }
 
+  if (total === 0) {
+    return (
+      <div className="screen">
+        <Placeholder header="Нечего повторять" description="На сегодня карточек нет.">
+          ✅
+        </Placeholder>
+        <div style={{ padding: 16 }}>
+          <Button stretched onClick={() => navigate(backRoute)}>
+            Назад
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   if (finished) {
     if (done > 0) hapticSuccess()
     return (
@@ -67,7 +106,7 @@ export function StudyScreen({
           🎉
         </Placeholder>
         <div style={{ padding: 16 }}>
-          <Button stretched onClick={() => navigate({ name: 'deck', deckId })}>
+          <Button stretched onClick={() => navigate(backRoute)}>
             Готово
           </Button>
         </div>
@@ -75,12 +114,15 @@ export function StudyScreen({
     )
   }
 
+  const deckTitle = deckId ? null : decks.find((d) => d.id === current!.word.deckId)?.title
+
   return (
     <div className="screen">
       <div style={{ padding: '0 0 12px' }}>
         <Progress value={progress} />
         <div style={{ textAlign: 'center', fontSize: 13, opacity: 0.6, marginTop: 6 }}>
           {done} / {total}
+          {deckTitle && <span> · {deckTitle}</span>}
         </div>
       </div>
 

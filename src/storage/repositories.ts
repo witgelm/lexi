@@ -4,8 +4,13 @@ import type { Deck, DecksIndex, Review, Word } from '@/domain/types'
 
 // Telegram CloudStorage keys may only contain [A-Za-z0-9_-] — no colons.
 const K_DECKS = 'idx'
+const K_SETTINGS = 'settings'
 const wordsNs = (deckId: string) => `d_${deckId}_w`
 const reviewsNs = (deckId: string) => `d_${deckId}_r`
+
+export interface Settings {
+  newLimit: number
+}
 
 /** Simple id generator (no crypto dependency needed for local ids). */
 export function genId(): string {
@@ -39,6 +44,15 @@ export const decksRepo = {
     await cloud.setJSON(K_DECKS, idx)
     await saveCollection<Word>(wordsNs(deckId), [])
     await saveCollection<Review>(reviewsNs(deckId), [])
+  },
+}
+
+export const settingsRepo = {
+  load(fallback: Settings): Promise<Settings> {
+    return cloud.getJSON<Settings>(K_SETTINGS, fallback)
+  },
+  async save(settings: Settings): Promise<void> {
+    await cloud.setJSON(K_SETTINGS, settings)
   },
 }
 
