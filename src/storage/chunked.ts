@@ -4,9 +4,10 @@ import { cloud } from './cloudStorage'
  * Stores an array of items across multiple CloudStorage keys so that no
  * single value exceeds the 4096-byte limit. Items are packed greedily.
  *
- * Layout for a collection named `ns`:
- *   `${ns}:i`      → { chunks: number }        (index: how many chunk keys exist)
- *   `${ns}:c0..cN` → JSON array of items
+ * Layout for a collection named `ns` (keys use only [A-Za-z0-9_-] per
+ * Telegram CloudStorage rules — no colons):
+ *   `${ns}_i`      → { chunks: number }        (index: how many chunk keys exist)
+ *   `${ns}_c0..cN` → JSON array of items
  */
 const MAX_BYTES = 3800 // headroom under 4096 for JSON overhead
 
@@ -15,10 +16,10 @@ function byteLen(s: string): number {
 }
 
 export async function loadCollection<T>(ns: string): Promise<T[]> {
-  const { chunks } = await cloud.getJSON<{ chunks: number }>(`${ns}:i`, { chunks: 0 })
+  const { chunks } = await cloud.getJSON<{ chunks: number }>(`${ns}_i`, { chunks: 0 })
   const out: T[] = []
   for (let i = 0; i < chunks; i++) {
-    const part = await cloud.getJSON<T[]>(`${ns}:c${i}`, [])
+    const part = await cloud.getJSON<T[]>(`${ns}_c${i}`, [])
     out.push(...part)
   }
   return out
@@ -39,14 +40,14 @@ export async function saveCollection<T>(ns: string, items: T[]): Promise<void> {
   }
   if (cur.length > 0) chunks.push(cur)
 
-  const prev = await cloud.getJSON<{ chunks: number }>(`${ns}:i`, { chunks: 0 })
+  const prev = await cloud.getJSON<{ chunks: number }>(`${ns}_i`, { chunks: 0 })
 
   for (let i = 0; i < chunks.length; i++) {
-    await cloud.setJSON(`${ns}:c${i}`, chunks[i])
+    await cloud.setJSON(`${ns}_c${i}`, chunks[i])
   }
   // Remove stale chunk keys if the collection shrank.
   for (let i = chunks.length; i < prev.chunks; i++) {
-    await cloud.remove(`${ns}:c${i}`)
+    await cloud.remove(`${ns}_c${i}`)
   }
-  await cloud.setJSON(`${ns}:i`, { chunks: chunks.length })
+  await cloud.setJSON(`${ns}_i`, { chunks: chunks.length })
 }

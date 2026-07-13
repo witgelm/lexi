@@ -38,6 +38,9 @@ export const cloud = {
   },
 
   async set(key: string, value: string): Promise<void> {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(key)) {
+      throw new Error(`Invalid CloudStorage key "${key}" (only A-Za-z0-9_- allowed, max 128)`)
+    }
     if (new Blob([value]).size > 4096) {
       throw new Error(`CloudStorage value for "${key}" exceeds 4096 bytes`)
     }

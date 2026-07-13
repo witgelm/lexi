@@ -2,9 +2,10 @@ import { cloud } from './cloudStorage'
 import { loadCollection, saveCollection } from './chunked'
 import type { Deck, DecksIndex, Review, Word } from '@/domain/types'
 
+// Telegram CloudStorage keys may only contain [A-Za-z0-9_-] — no colons.
 const K_DECKS = 'idx'
-const wordsNs = (deckId: string) => `d:${deckId}:w`
-const reviewsNs = (deckId: string) => `d:${deckId}:r`
+const wordsNs = (deckId: string) => `d_${deckId}_w`
+const reviewsNs = (deckId: string) => `d_${deckId}_r`
 
 /** Simple id generator (no crypto dependency needed for local ids). */
 export function genId(): string {

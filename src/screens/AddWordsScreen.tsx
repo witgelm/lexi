@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button, List, Section, Textarea, Cell } from '@telegram-apps/telegram-ui'
 import { useStore } from '@/store/useStore'
 import { parseBulk } from '@/domain/import'
+import { showAlert } from '@/telegram/init'
 import type { Route } from '@/App'
 
 export function AddWordsScreen({
@@ -20,9 +21,14 @@ export function AddWordsScreen({
   async function onSave() {
     if (parsed.length === 0) return
     setSaving(true)
-    await addWords(deckId, parsed)
-    setSaving(false)
-    navigate({ name: 'deck', deckId })
+    try {
+      await addWords(deckId, parsed)
+      navigate({ name: 'deck', deckId })
+    } catch (err) {
+      showAlert(`Не удалось сохранить: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

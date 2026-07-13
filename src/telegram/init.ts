@@ -9,6 +9,7 @@ type WebApp = {
   ready: () => void
   expand: () => void
   colorScheme?: 'light' | 'dark'
+  showAlert?: (message: string, cb?: () => void) => void
   HapticFeedback?: {
     impactOccurred: (style: 'light' | 'medium' | 'heavy') => void
     notificationOccurred: (type: 'error' | 'success' | 'warning') => void
@@ -36,4 +37,11 @@ export function haptic(kind: 'light' | 'medium' | 'heavy' = 'light'): void {
 
 export function hapticSuccess(): void {
   getWebApp()?.HapticFeedback?.notificationOccurred('success')
+}
+
+/** Native Telegram alert; falls back to window.alert in the browser. */
+export function showAlert(message: string): void {
+  const wa = getWebApp()
+  if (wa?.showAlert) wa.showAlert(message)
+  else window.alert(message)
 }
