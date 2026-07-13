@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Deck, Review, Word } from '@/domain/types'
+import type { PresetDeck } from '@/data/greekStarter'
 import { decksRepo, genId, reviewsRepo, wordsRepo } from '@/storage/repositories'
 import { grade as gradeReview, newReview } from '@/srs/srs'
 import type { Grade } from 'ts-fsrs'
@@ -15,6 +16,7 @@ interface State {
 
   loadDecks: () => Promise<void>
   createDeck: (title: string, langFrom: string, langTo: string) => Promise<Deck>
+  loadPreset: (preset: PresetDeck) => Promise<Deck>
   deleteDeck: (deckId: string) => Promise<void>
   loadDeck: (deckId: string) => Promise<void>
   addWords: (
@@ -42,6 +44,12 @@ export const useStore = create<State>((set, get) => ({
     const deck: Deck = { id: genId(), title, langFrom, langTo, createdAt: Date.now() }
     await decksRepo.save(deck)
     set((s) => ({ decks: [...s.decks, deck] }))
+    return deck
+  },
+
+  async loadPreset(preset) {
+    const deck = await get().createDeck(preset.title, preset.langFrom, preset.langTo)
+    await get().addWords(deck.id, preset.words)
     return deck
   },
 
