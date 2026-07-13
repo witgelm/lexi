@@ -55,11 +55,6 @@ export function DeckScreen({
           ) : (
             <Banner header="На сегодня всё!" description="Возвращайтесь позже за повторениями." />
           )}
-          <div style={{ padding: '8px 16px' }}>
-            <Button stretched mode="bezeled" onClick={() => navigate({ name: 'add', deckId })}>
-              Добавить слова
-            </Button>
-          </div>
         </Section>
 
         <Section>

@@ -1,12 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Button,
-  Cell,
-  Input,
-  List,
-  Section,
-  Placeholder,
-} from '@telegram-apps/telegram-ui'
+import { Button, Cell, List, Section, Placeholder } from '@telegram-apps/telegram-ui'
 import { useStore } from '@/store/useStore'
 import { globalStats } from '@/srs/queue'
 import { GREEK_STARTER } from '@/data/greekStarter'
@@ -16,16 +9,11 @@ import type { Route } from '@/App'
 export function DeckListScreen({ navigate }: { navigate: (r: Route) => void }) {
   const decks = useStore((s) => s.decks)
   const loading = useStore((s) => s.loading)
-  const createDeck = useStore((s) => s.createDeck)
   const loadPreset = useStore((s) => s.loadPreset)
   const wordsMap = useStore((s) => s.words)
   const reviewsMap = useStore((s) => s.reviews)
   const ensureAllLoaded = useStore((s) => s.ensureAllLoaded)
 
-  const [title, setTitle] = useState('')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [creating, setCreating] = useState(false)
   const [loadingPreset, setLoadingPreset] = useState(false)
 
   // Load every deck's cards so we can show today's aggregate counts.
@@ -55,17 +43,6 @@ export function DeckListScreen({ navigate }: { navigate: (r: Route) => void }) {
     } finally {
       setLoadingPreset(false)
     }
-  }
-
-  async function onCreate() {
-    if (!title.trim()) return
-    setCreating(true)
-    const deck = await createDeck(title.trim(), from.trim() || '—', to.trim() || '—')
-    setCreating(false)
-    setTitle('')
-    setFrom('')
-    setTo('')
-    navigate({ name: 'deck', deckId: deck.id })
   }
 
   return (
@@ -100,7 +77,7 @@ export function DeckListScreen({ navigate }: { navigate: (r: Route) => void }) {
         <Section header="Мои колоды">
           {loading && <Cell>Загрузка…</Cell>}
           {!loading && decks.length === 0 && (
-            <Placeholder description="Создайте первую колоду и добавьте слова">
+            <Placeholder description="Загрузите готовый словарь ниже, чтобы начать">
               📚
             </Placeholder>
           )}
@@ -129,17 +106,6 @@ export function DeckListScreen({ navigate }: { navigate: (r: Route) => void }) {
           >
             🇬🇷 {GREEK_STARTER.title}
           </Cell>
-        </Section>
-
-        <Section header="Новая колода">
-          <Input header="Название" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Английский A1" />
-          <Input header="Язык слова" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="en" />
-          <Input header="Перевод" value={to} onChange={(e) => setTo(e.target.value)} placeholder="ru" />
-          <div style={{ padding: '8px 16px' }}>
-            <Button stretched disabled={creating || !title.trim()} onClick={onCreate}>
-              Создать колоду
-            </Button>
-          </div>
         </Section>
       </List>
     </div>
