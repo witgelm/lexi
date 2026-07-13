@@ -64,11 +64,13 @@ export function StudyScreen({
   const progress = total > 0 ? Math.round((done / total) * 100) : 0
   const finished = useMemo(() => queue != null && pos >= total, [queue, pos, total])
 
-  async function onGrade(g: Grade) {
+  function onGrade(g: Grade) {
     if (!current) return
     haptic('light')
     // Grade against the card's own deck — cards may come from several decks.
-    await gradeCard(current.word.deckId, current.word.id, g)
+    // Fire-and-forget: the store updates memory now and persists in the
+    // background, so the next card shows without waiting on CloudStorage.
+    gradeCard(current.word.deckId, current.word.id, g)
     setDone((d) => d + 1)
     setRevealed(false)
     setPos((p) => p + 1)

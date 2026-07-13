@@ -5,6 +5,33 @@ import { decksRepo, genId, reviewsRepo, wordsRepo } from '@/storage/repositories
 import { grade as gradeReview, newReview } from '@/srs/srs'
 import type { Grade } from 'ts-fsrs'
 
+/**
+ * Per-deck background writer for reviews. Grading updates in-memory state
+ * synchronously (instant UI) and kicks off a persist that runs off the UI
+ * path. Rapid grades are coalesced: while a write is in flight, the deck is
+ * marked dirty and re-persisted once with the latest state when it finishes —
+ * so we never block on CloudStorage and never stack overlapping writes.
+ */
+const writeState: Record<string, { writing: boolean; dirty: boolean }> = {}
+
+async function persistReviews(deckId: string, getReviews: () => Review[] | undefined): Promise<void> {
+  const st = (writeState[deckId] ??= { writing: false, dirty: false })
+  if (st.writing) {
+    st.dirty = true
+    return
+  }
+  st.writing = true
+  try {
+    do {
+      st.dirty = false
+      const reviews = getReviews()
+      if (reviews) await reviewsRepo.saveAll(deckId, reviews)
+    } while (st.dirty)
+  } finally {
+    st.writing = false
+  }
+}
+
 interface State {
   decks: Deck[]
   loading: boolean
@@ -21,7 +48,8 @@ interface State {
     deckId: string,
     entries: Array<{ front: string; back: string; transcription?: string; example?: string }>,
   ) => Promise<void>
-  gradeCard: (deckId: string, cardId: string, g: Grade) => Promise<void>
+  /** Updates the review in memory instantly and persists in the background. */
+  gradeCard: (deckId: string, cardId: string, g: Grade) => void
   /** Ensures every deck's words/reviews are loaded (for the global session). */
   ensureAllLoaded: () => Promise<void>
 }
@@ -104,11 +132,14 @@ export const useStore = create<State>((set, get) => ({
     }))
   },
 
-  async gradeCard(deckId, cardId, g) {
+  gradeCard(deckId, cardId, g) {
+    const reviews = get().reviews[deckId]
+    if (!reviews) return // deck not loaded — nothing to grade
     const now = new Date()
-    const reviews = get().reviews[deckId] ?? (await reviewsRepo.list(deckId))
     const updated = reviews.map((r) => (r.cardId === cardId ? gradeReview(r, g, now) : r))
-    await reviewsRepo.saveAll(deckId, updated)
+    // Instant in-memory update so the UI can advance immediately...
     set((s) => ({ reviews: { ...s.reviews, [deckId]: updated } }))
+    // ...and persist off the UI path, coalescing rapid grades into one write.
+    void persistReviews(deckId, () => get().reviews[deckId])
   },
 }))
