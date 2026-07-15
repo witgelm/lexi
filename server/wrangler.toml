@@ -1,0 +1,15 @@
+name = "lexi-api"
+main = "src/index.ts"
+compatibility_date = "2026-07-01"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 (SQLite) binding. `database_id` is filled in after you run
+# `wrangler d1 create lexi` (Phase 4). Until then local dev uses a local DB.
+[[d1_databases]]
+binding = "DB"
+database_name = "lexi"
+database_id = "PLACEHOLDER_RUN_wrangler_d1_create_lexi"
+migrations_dir = "migrations"
+
+# BOT_TOKEN is NOT stored here — set it as a secret:
+#   wrangler secret put BOT_TOKEN

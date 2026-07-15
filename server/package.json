@@ -1,0 +1,25 @@
+{
+  "name": "lexi-api",
+  "private": true,
+  "type": "module",
+  "description": "Lexi backend — Cloudflare Worker (Hono) + D1 (SQLite)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply lexi --local",
+    "db:migrate:remote": "wrangler d1 migrations apply lexi --remote",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.38.3",
+    "hono": "^4.6.14",
+    "ts-fsrs": "^5.2.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "drizzle-kit": "^0.30.1",
+    "typescript": "^5.9.2",
+    "wrangler": "^3.99.0"
+  }
+}
