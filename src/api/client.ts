@@ -44,11 +44,12 @@ function mapReview(r: Record<string, unknown>): Review {
   }
 }
 
-export interface PresetWord {
-  front: string
-  back: string
-  transcription?: string
-  example?: string
+export interface Preset {
+  id: string
+  title: string
+  langFrom: string
+  langTo: string
+  wordCount: number
 }
 
 export interface DayCount {
@@ -79,13 +80,12 @@ export const api = {
     return { words: data.words.map(mapWord), reviews: data.reviews.map(mapReview) }
   },
 
-  createDeck(payload: {
-    title: string
-    langFrom: string
-    langTo: string
-    words: PresetWord[]
-  }): Promise<Deck> {
-    return request<Deck>('/api/decks', { method: 'POST', body: JSON.stringify(payload) })
+  listPresets(): Promise<Preset[]> {
+    return request<Preset[]>('/api/presets')
+  },
+
+  loadPreset(presetId: string): Promise<Deck> {
+    return request<Deck>(`/api/presets/${presetId}/load`, { method: 'POST' })
   },
 
   deleteDeck(deckId: string): Promise<{ ok: boolean }> {

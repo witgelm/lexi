@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import type { Deck, Grade, Review, Word } from '@/domain/types'
-import type { PresetDeck } from '@/data/greekStarter'
 import { api } from '@/api/client'
 
 interface State {
@@ -12,7 +11,7 @@ interface State {
 
   loadDecks: () => Promise<void>
   loadDeck: (deckId: string) => Promise<void>
-  loadPreset: (preset: PresetDeck) => Promise<Deck>
+  loadPreset: (presetId: string) => Promise<Deck>
   deleteDeck: (deckId: string) => Promise<void>
   /** Optimistic: caller advances the UI; the graded review is patched on reply. */
   gradeCard: (deckId: string, wordId: string, g: Grade) => void
@@ -40,13 +39,8 @@ export const useStore = create<State>((set, get) => ({
     }))
   },
 
-  async loadPreset(preset) {
-    const deck = await api.createDeck({
-      title: preset.title,
-      langFrom: preset.langFrom,
-      langTo: preset.langTo,
-      words: preset.words,
-    })
+  async loadPreset(presetId) {
+    const deck = await api.loadPreset(presetId)
     set((s) => ({ decks: [...s.decks, deck] }))
     await get().loadDeck(deck.id)
     return deck

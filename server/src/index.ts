@@ -7,6 +7,7 @@ import * as schema from './db/schema'
 import { decks, reviewLog, reviews, users, words } from './db/schema'
 import { validateInitData } from './auth'
 import { emptyReviewFields, gradeReviewFields } from './fsrs'
+import { PRESETS, findPreset, type PresetWord } from './data/presets'
 
 export interface Env {
   DB: D1Database
@@ -28,6 +29,56 @@ async function insertInChunks<T>(
 ): Promise<void> {
   for (let i = 0; i < rows.length; i += size) {
     await run(rows.slice(i, i + size))
+  }
+}
+
+/** Creates a deck with its words + fresh reviews for a user; returns deck meta. */
+async function createDeckWithWords(
+  d: ReturnType<typeof db>,
+  userId: string,
+  spec: { title: string; langFrom: string; langTo: string; words: PresetWord[] },
+) {
+  const now = Date.now()
+  const deckId = crypto.randomUUID()
+
+  await d
+    .insert(decks)
+    .values({
+      id: deckId,
+      userId,
+      title: spec.title,
+      langFrom: spec.langFrom,
+      langTo: spec.langTo,
+      createdAt: now,
+    })
+    .run()
+
+  const wordRows = spec.words.map((w) => ({
+    id: crypto.randomUUID(),
+    deckId,
+    front: w.front,
+    back: w.back,
+    transcription: w.transcription ?? null,
+    example: w.example ?? null,
+    createdAt: now,
+  }))
+  const reviewRows = wordRows.map((w) => ({
+    wordId: w.id,
+    userId,
+    deckId,
+    ...emptyReviewFields(new Date(now)),
+  }))
+
+  await insertInChunks(wordRows, 10, (batch) => d.insert(words).values(batch).run())
+  await insertInChunks(reviewRows, 10, (batch) => d.insert(reviews).values(batch).run())
+
+  return {
+    id: deckId,
+    title: spec.title,
+    langFrom: spec.langFrom,
+    langTo: spec.langTo,
+    createdAt: now,
+    wordCount: wordRows.length,
   }
 }
 
@@ -95,59 +146,26 @@ api.get('/decks', async (c) => {
   return c.json(rows)
 })
 
-/** Create a deck with words (used to load a preset dictionary). */
-api.post('/decks', async (c) => {
+/** List available built-in dictionaries (metadata only). */
+api.get('/presets', (c) =>
+  c.json(
+    PRESETS.map((p) => ({
+      id: p.id,
+      title: p.title,
+      langFrom: p.langFrom,
+      langTo: p.langTo,
+      wordCount: p.words.length,
+    })),
+  ),
+)
+
+/** Load a built-in dictionary into a new deck for the user. */
+api.post('/presets/:id/load', async (c) => {
   const user = c.get('user')
-  const body = await c.req.json<{
-    title: string
-    langFrom: string
-    langTo: string
-    words: Array<{ front: string; back: string; transcription?: string; example?: string }>
-  }>()
-
-  const now = Date.now()
-  const deckId = crypto.randomUUID()
-  const d = db(c.env)
-
-  await d
-    .insert(decks)
-    .values({
-      id: deckId,
-      userId: user.id,
-      title: body.title,
-      langFrom: body.langFrom,
-      langTo: body.langTo,
-      createdAt: now,
-    })
-    .run()
-
-  const wordRows = body.words.map((w) => ({
-    id: crypto.randomUUID(),
-    deckId,
-    front: w.front,
-    back: w.back,
-    transcription: w.transcription ?? null,
-    example: w.example ?? null,
-    createdAt: now,
-  }))
-  const reviewRows = wordRows.map((w) => ({
-    wordId: w.id,
-    userId: user.id,
-    deckId,
-    ...emptyReviewFields(new Date(now)),
-  }))
-
-  await insertInChunks(wordRows, 10, (batch) => d.insert(words).values(batch).run())
-  await insertInChunks(reviewRows, 10, (batch) => d.insert(reviews).values(batch).run())
-
-  return c.json({
-    id: deckId,
-    title: body.title,
-    langFrom: body.langFrom,
-    langTo: body.langTo,
-    createdAt: now,
-    wordCount: wordRows.length,
-  })
+  const preset = findPreset(c.req.param('id'))
+  if (!preset) return c.json({ error: 'unknown preset' }, 404)
+  const deck = await createDeckWithWords(db(c.env), user.id, preset)
+  return c.json(deck)
 })
 
 /** Words + reviews for one deck (ownership enforced). */

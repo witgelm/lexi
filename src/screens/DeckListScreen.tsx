@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Cell, List, Section, Placeholder } from '@telegram-apps/telegram-ui'
 import { useStore } from '@/store/useStore'
 import { globalStats } from '@/srs/queue'
-import { GREEK_STARTER } from '@/data/greekStarter'
+import { api, type Preset } from '@/api/client'
 import { showAlert } from '@/telegram/init'
 import type { Route } from '@/App'
 
@@ -14,12 +14,18 @@ export function DeckListScreen({ navigate }: { navigate: (r: Route) => void }) {
   const reviewsMap = useStore((s) => s.reviews)
   const ensureAllLoaded = useStore((s) => s.ensureAllLoaded)
 
-  const [loadingPreset, setLoadingPreset] = useState(false)
+  const [presets, setPresets] = useState<Preset[]>([])
+  const [loadingId, setLoadingId] = useState<string | null>(null)
 
   // Load every deck's cards so we can show today's aggregate counts.
   useEffect(() => {
     if (!loading && decks.length > 0) void ensureAllLoaded()
   }, [loading, decks, ensureAllLoaded])
+
+  // Fetch the server-side dictionary catalog.
+  useEffect(() => {
+    api.listPresets().then(setPresets).catch(() => setPresets([]))
+  }, [])
 
   const allLoaded = decks.length > 0 && decks.every((d) => wordsMap[d.id] != null)
   const today = useMemo(() => {
@@ -33,15 +39,15 @@ export function DeckListScreen({ navigate }: { navigate: (r: Route) => void }) {
 
   const toStudy = today ? today.due + today.fresh : 0
 
-  async function onLoadGreek() {
-    setLoadingPreset(true)
+  async function onLoadPreset(presetId: string) {
+    setLoadingId(presetId)
     try {
-      const deck = await loadPreset(GREEK_STARTER)
+      const deck = await loadPreset(presetId)
       navigate({ name: 'deck', deckId: deck.id })
     } catch (err) {
       showAlert(`Не удалось загрузить колоду: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
-      setLoadingPreset(false)
+      setLoadingId(null)
     }
   }
 
@@ -95,21 +101,28 @@ export function DeckListScreen({ navigate }: { navigate: (r: Route) => void }) {
           ))}
         </Section>
 
-        <Section
-          header="Готовые колоды"
-          footer="Быстрый старт — 100 частотных греческих слов с транскрипцией"
-        >
-          <Cell
-            subtitle={`${GREEK_STARTER.words.length} слов · ${GREEK_STARTER.langFrom} → ${GREEK_STARTER.langTo}`}
-            after={
-              <Button size="s" loading={loadingPreset} disabled={loadingPreset} onClick={onLoadGreek}>
-                Загрузить
-              </Button>
-            }
-          >
-            🇬🇷 {GREEK_STARTER.title}
-          </Cell>
-        </Section>
+        {presets.length > 0 && (
+          <Section header="Готовые словари" footer="Быстрый старт — загрузите готовый набор слов">
+            {presets.map((p) => (
+              <Cell
+                key={p.id}
+                subtitle={`${p.wordCount} слов · ${p.langFrom} → ${p.langTo}`}
+                after={
+                  <Button
+                    size="s"
+                    loading={loadingId === p.id}
+                    disabled={loadingId !== null}
+                    onClick={() => onLoadPreset(p.id)}
+                  >
+                    Загрузить
+                  </Button>
+                }
+              >
+                {p.title}
+              </Cell>
+            ))}
+          </Section>
+        )}
       </List>
     </div>
   )
