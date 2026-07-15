@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Card, List, Section, Placeholder, Progress } from '@telegram-apps/telegram-ui'
 import { useStore } from '@/store/useStore'
 import { buildGlobalQueue, buildQueue, type StudyItem } from '@/srs/queue'
-import { RATINGS } from '@/srs/srs'
+import { RATINGS } from '@/srs/ratings'
 import { haptic, hapticSuccess } from '@/telegram/init'
-import type { Grade } from 'ts-fsrs'
+import type { Grade } from '@/domain/types'
 import type { Route } from '@/App'
 
 export function StudyScreen({
@@ -42,7 +42,7 @@ export function StudyScreen({
   // Build the frozen queue once the data is ready.
   useEffect(() => {
     if (queue != null) return
-    const now = new Date()
+    const now = Date.now()
     if (deckId) {
       const words = wordsMap[deckId]
       const reviews = reviewsMap[deckId]

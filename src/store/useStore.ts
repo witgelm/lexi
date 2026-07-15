@@ -1,36 +1,7 @@
 import { create } from 'zustand'
-import type { Deck, Review, Word } from '@/domain/types'
+import type { Deck, Grade, Review, Word } from '@/domain/types'
 import type { PresetDeck } from '@/data/greekStarter'
-import { decksRepo, genId, reviewsRepo, wordsRepo } from '@/storage/repositories'
-import { grade as gradeReview, newReview } from '@/srs/srs'
-import type { Grade } from 'ts-fsrs'
-
-/**
- * Per-deck background writer for reviews. Grading updates in-memory state
- * synchronously (instant UI) and kicks off a persist that runs off the UI
- * path. Rapid grades are coalesced: while a write is in flight, the deck is
- * marked dirty and re-persisted once with the latest state when it finishes —
- * so we never block on CloudStorage and never stack overlapping writes.
- */
-const writeState: Record<string, { writing: boolean; dirty: boolean }> = {}
-
-async function persistReviews(deckId: string, getReviews: () => Review[] | undefined): Promise<void> {
-  const st = (writeState[deckId] ??= { writing: false, dirty: false })
-  if (st.writing) {
-    st.dirty = true
-    return
-  }
-  st.writing = true
-  try {
-    do {
-      st.dirty = false
-      const reviews = getReviews()
-      if (reviews) await reviewsRepo.saveAll(deckId, reviews)
-    } while (st.dirty)
-  } finally {
-    st.writing = false
-  }
-}
+import { api } from '@/api/client'
 
 interface State {
   decks: Deck[]
@@ -40,16 +11,11 @@ interface State {
   reviews: Record<string, Review[]>
 
   loadDecks: () => Promise<void>
-  createDeck: (title: string, langFrom: string, langTo: string) => Promise<Deck>
+  loadDeck: (deckId: string) => Promise<void>
   loadPreset: (preset: PresetDeck) => Promise<Deck>
   deleteDeck: (deckId: string) => Promise<void>
-  loadDeck: (deckId: string) => Promise<void>
-  addWords: (
-    deckId: string,
-    entries: Array<{ front: string; back: string; transcription?: string; example?: string }>,
-  ) => Promise<void>
-  /** Updates the review in memory instantly and persists in the background. */
-  gradeCard: (deckId: string, cardId: string, g: Grade) => void
+  /** Optimistic: caller advances the UI; the graded review is patched on reply. */
+  gradeCard: (deckId: string, wordId: string, g: Grade) => void
   /** Ensures every deck's words/reviews are loaded (for the global session). */
   ensureAllLoaded: () => Promise<void>
 }
@@ -62,32 +28,32 @@ export const useStore = create<State>((set, get) => ({
 
   async loadDecks() {
     set({ loading: true })
-    const decks = await decksRepo.list()
+    const decks = await api.listDecks()
     set({ decks, loading: false })
   },
 
-  async ensureAllLoaded() {
-    const { decks, words } = get()
-    await Promise.all(
-      decks.filter((d) => words[d.id] == null).map((d) => get().loadDeck(d.id)),
-    )
-  },
-
-  async createDeck(title, langFrom, langTo) {
-    const deck: Deck = { id: genId(), title, langFrom, langTo, createdAt: Date.now() }
-    await decksRepo.save(deck)
-    set((s) => ({ decks: [...s.decks, deck] }))
-    return deck
+  async loadDeck(deckId) {
+    const { words, reviews } = await api.getDeckCards(deckId)
+    set((s) => ({
+      words: { ...s.words, [deckId]: words },
+      reviews: { ...s.reviews, [deckId]: reviews },
+    }))
   },
 
   async loadPreset(preset) {
-    const deck = await get().createDeck(preset.title, preset.langFrom, preset.langTo)
-    await get().addWords(deck.id, preset.words)
+    const deck = await api.createDeck({
+      title: preset.title,
+      langFrom: preset.langFrom,
+      langTo: preset.langTo,
+      words: preset.words,
+    })
+    set((s) => ({ decks: [...s.decks, deck] }))
+    await get().loadDeck(deck.id)
     return deck
   },
 
   async deleteDeck(deckId) {
-    await decksRepo.remove(deckId)
+    await api.deleteDeck(deckId)
     set((s) => {
       const words = { ...s.words }
       const reviews = { ...s.reviews }
@@ -97,49 +63,32 @@ export const useStore = create<State>((set, get) => ({
     })
   },
 
-  async loadDeck(deckId) {
-    const [words, reviews] = await Promise.all([
-      wordsRepo.list(deckId),
-      reviewsRepo.list(deckId),
-    ])
-    set((s) => ({
-      words: { ...s.words, [deckId]: words },
-      reviews: { ...s.reviews, [deckId]: reviews },
-    }))
+  gradeCard(deckId, wordId, g) {
+    // Persist in the background; patch the in-memory review when it returns so
+    // stats/queues stay consistent without blocking the UI on the network.
+    void api
+      .gradeCard(wordId, g)
+      .then((updated) => {
+        set((s) => {
+          const list = s.reviews[deckId]
+          if (!list) return {}
+          return {
+            reviews: {
+              ...s.reviews,
+              [deckId]: list.map((r) => (r.wordId === wordId ? updated : r)),
+            },
+          }
+        })
+      })
+      .catch(() => {
+        /* best-effort; next session reload reconciles from the server */
+      })
   },
 
-  async addWords(deckId, entries) {
-    const now = new Date()
-    const newWords: Word[] = entries.map((e) => ({
-      id: genId(),
-      deckId,
-      front: e.front,
-      back: e.back,
-      transcription: e.transcription,
-      example: e.example,
-      createdAt: now.getTime(),
-    }))
-    const newReviews: Review[] = newWords.map((w) => newReview(w.id, now))
-
-    await wordsRepo.addMany(deckId, newWords)
-    const existingReviews = get().reviews[deckId] ?? (await reviewsRepo.list(deckId))
-    const merged = [...existingReviews, ...newReviews]
-    await reviewsRepo.saveAll(deckId, merged)
-
-    set((s) => ({
-      words: { ...s.words, [deckId]: [...(s.words[deckId] ?? []), ...newWords] },
-      reviews: { ...s.reviews, [deckId]: merged },
-    }))
-  },
-
-  gradeCard(deckId, cardId, g) {
-    const reviews = get().reviews[deckId]
-    if (!reviews) return // deck not loaded — nothing to grade
-    const now = new Date()
-    const updated = reviews.map((r) => (r.cardId === cardId ? gradeReview(r, g, now) : r))
-    // Instant in-memory update so the UI can advance immediately...
-    set((s) => ({ reviews: { ...s.reviews, [deckId]: updated } }))
-    // ...and persist off the UI path, coalescing rapid grades into one write.
-    void persistReviews(deckId, () => get().reviews[deckId])
+  async ensureAllLoaded() {
+    const { decks, words } = get()
+    await Promise.all(
+      decks.filter((d) => words[d.id] == null).map((d) => get().loadDeck(d.id)),
+    )
   },
 }))

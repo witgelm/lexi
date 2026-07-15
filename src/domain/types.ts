@@ -1,16 +1,14 @@
-import type { Card as FsrsCard } from 'ts-fsrs'
-
-/** A deck groups cards; language pair is free-form (universal). */
+/** A deck (dictionary). `wordCount` is present in list responses. */
 export interface Deck {
   id: string
   title: string
-  /** ISO-ish language code or free label, e.g. "en", "de", "任意" */
   langFrom: string
   langTo: string
   createdAt: number
+  wordCount?: number
 }
 
-/** The learnable unit: front (prompt) → back (answer). */
+/** A word/card belonging to a deck. */
 export interface Word {
   id: string
   deckId: string
@@ -22,22 +20,18 @@ export interface Word {
 }
 
 /**
- * FSRS scheduling state for a word, persisted as a plain object.
- * `due` and `last_review` are stored as epoch millis for JSON safety;
- * conversion to/from ts-fsrs `Card` happens in the SRS service.
+ * FSRS scheduling state for a word, as the client needs it. The full ts-fsrs
+ * card lives only on the server; the client keeps the queryable fields used to
+ * build study queues and show progress.
  */
 export interface Review {
-  cardId: string
-  fsrs: SerializedFsrsCard
-}
-
-/** ts-fsrs Card with Date fields replaced by epoch millis for storage. */
-export type SerializedFsrsCard = Omit<FsrsCard, 'due' | 'last_review'> & {
+  wordId: string
   due: number
-  last_review?: number
+  state: number
+  reps: number
+  lapses: number
+  lastReview: number | null
 }
 
-/** Index blob stored under a single CloudStorage key. */
-export interface DecksIndex {
-  decks: Array<Pick<Deck, 'id' | 'title' | 'langFrom' | 'langTo' | 'createdAt'>>
-}
+/** Grade values sent to the server (match ts-fsrs Rating). */
+export type Grade = 1 | 2 | 3 | 4
