@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, index } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core'
 
 /** A Telegram user, keyed by their telegram_id. */
 export const users = sqliteTable('users', {
@@ -41,7 +41,12 @@ export const words = sqliteTable(
   (t) => [index('words_deck_idx').on(t.deckId)],
 )
 
-/** FSRS scheduling state, one row per word. Dates stored as epoch millis. */
+/**
+ * FSRS scheduling state, one row per word. `fsrs` holds the full serialized
+ * ts-fsrs Card (source of truth for scheduling — robust across ts-fsrs
+ * versions). The other columns are denormalized copies for fast/queryable
+ * filtering and stats. Dates are epoch millis.
+ */
 export const reviews = sqliteTable(
   'reviews',
   {
@@ -55,14 +60,14 @@ export const reviews = sqliteTable(
       .notNull()
       .references(() => decks.id, { onDelete: 'cascade' }),
     due: integer('due').notNull(),
-    stability: real('stability').notNull(),
-    difficulty: real('difficulty').notNull(),
-    elapsedDays: integer('elapsed_days').notNull(),
-    scheduledDays: integer('scheduled_days').notNull(),
+    state: integer('state').notNull(), // 0=New,1=Learning,2=Review,3=Relearning
     reps: integer('reps').notNull(),
     lapses: integer('lapses').notNull(),
-    state: integer('state').notNull(),
     lastReview: integer('last_review'),
+    fsrs: text('fsrs').notNull(), // full serialized ts-fsrs Card (JSON)
   },
-  (t) => [index('reviews_user_due_idx').on(t.userId, t.due)],
+  (t) => [
+    index('reviews_user_due_idx').on(t.userId, t.due),
+    index('reviews_user_state_idx').on(t.userId, t.state),
+  ],
 )

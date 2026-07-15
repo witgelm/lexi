@@ -14,20 +14,18 @@ CREATE TABLE `reviews` (
 	`user_id` text NOT NULL,
 	`deck_id` text NOT NULL,
 	`due` integer NOT NULL,
-	`stability` real NOT NULL,
-	`difficulty` real NOT NULL,
-	`elapsed_days` integer NOT NULL,
-	`scheduled_days` integer NOT NULL,
+	`state` integer NOT NULL,
 	`reps` integer NOT NULL,
 	`lapses` integer NOT NULL,
-	`state` integer NOT NULL,
 	`last_review` integer,
+	`fsrs` text NOT NULL,
 	FOREIGN KEY (`word_id`) REFERENCES `words`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`deck_id`) REFERENCES `decks`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE INDEX `reviews_user_due_idx` ON `reviews` (`user_id`,`due`);--> statement-breakpoint
+CREATE INDEX `reviews_user_state_idx` ON `reviews` (`user_id`,`state`);--> statement-breakpoint
 CREATE TABLE `users` (
 	`id` text PRIMARY KEY NOT NULL,
 	`telegram_id` text NOT NULL,
