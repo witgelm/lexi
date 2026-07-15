@@ -23,7 +23,7 @@ export function DeckScreen({
 
   const stats = useMemo(() => {
     if (!words || !reviews) return null
-    return deckStats(words, reviews, new Date())
+    return deckStats(words, reviews, Date.now())
   }, [words, reviews])
 
   if (!deck) {

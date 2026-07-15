@@ -8,7 +8,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "lexi"
-database_id = "PLACEHOLDER_RUN_wrangler_d1_create_lexi"
+database_id = "8b6272c4-7c12-479d-85bf-54d4e86b41b9"
 migrations_dir = "migrations"
 
 # BOT_TOKEN is NOT stored here — set it as a secret:

@@ -9,6 +9,7 @@
 type WebApp = {
   ready: () => void
   expand: () => void
+  initData?: string
   colorScheme?: 'light' | 'dark'
   showAlert?: (message: string, cb?: () => void) => void
   // Fullscreen API — Bot API 8.0+, absent on older clients.
@@ -48,6 +49,11 @@ export function initTelegram(): void {
 
 export function colorScheme(): 'light' | 'dark' {
   return getWebApp()?.colorScheme ?? 'light'
+}
+
+/** Raw Telegram initData string, sent to the API for auth. Empty in a browser. */
+export function initData(): string {
+  return getWebApp()?.initData ?? ''
 }
 
 export function haptic(kind: 'light' | 'medium' | 'heavy' = 'light'): void {

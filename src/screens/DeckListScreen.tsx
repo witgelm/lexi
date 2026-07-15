@@ -28,7 +28,7 @@ export function DeckListScreen({ navigate }: { navigate: (r: Route) => void }) {
       words: wordsMap[d.id] ?? [],
       reviews: reviewsMap[d.id] ?? [],
     }))
-    return globalStats(data, new Date())
+    return globalStats(data, Date.now())
   }, [allLoaded, decks, wordsMap, reviewsMap])
 
   const toStudy = today ? today.due + today.fresh : 0
