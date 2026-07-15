@@ -71,3 +71,19 @@ export const reviews = sqliteTable(
     index('reviews_user_state_idx').on(t.userId, t.state),
   ],
 )
+
+/** Append-only log of every grade, for streak / accuracy / activity stats. */
+export const reviewLog = sqliteTable(
+  'review_log',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deckId: text('deck_id').notNull(),
+    wordId: text('word_id').notNull(),
+    rating: integer('rating').notNull(), // 1=Again,2=Hard,3=Good,4=Easy
+    reviewedAt: integer('reviewed_at').notNull(),
+  },
+  (t) => [index('review_log_user_time_idx').on(t.userId, t.reviewedAt)],
+)

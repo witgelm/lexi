@@ -51,12 +51,20 @@ export interface PresetWord {
   example?: string
 }
 
+export interface DayCount {
+  date: string
+  count: number
+}
+
 export interface Stats {
-  totalWords: number
-  due: number
-  fresh: number
-  learned: number
-  lapses: number
+  overview: { totalWords: number; fresh: number; learned: number; due: number; lapses: number }
+  byState: { new: number; learning: number; review: number; relearning: number }
+  forecast: DayCount[]
+  activity: DayCount[]
+  reviewsToday: number
+  reviews7d: number
+  accuracy: number
+  streak: number
 }
 
 export const api = {

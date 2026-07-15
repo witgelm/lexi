@@ -50,6 +50,9 @@ export function DeckListScreen({ navigate }: { navigate: (r: Route) => void }) {
       <List>
         <Section header="Lexi" footer="Учим слова карточками с интервальными повторениями">
           <Cell subtitle="от греч. λέξις — «слово»">📖 Ваш словарь</Cell>
+          <Cell before="📊" onClick={() => navigate({ name: 'stats' })}>
+            Статистика
+          </Cell>
         </Section>
 
         {decks.length > 0 && (

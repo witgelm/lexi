@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { drizzle } from 'drizzle-orm/d1'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, gte, sql } from 'drizzle-orm'
 import type { Grade } from 'ts-fsrs'
 import * as schema from './db/schema'
-import { decks, reviews, users, words } from './db/schema'
+import { decks, reviewLog, reviews, users, words } from './db/schema'
 import { validateInitData } from './auth'
 import { emptyReviewFields, gradeReviewFields } from './fsrs'
 
@@ -183,6 +183,7 @@ api.delete('/decks/:id', async (c) => {
     .get()
   if (!deck) return c.json({ error: 'not found' }, 404)
 
+  await d.delete(reviewLog).where(eq(reviewLog.deckId, deckId)).run()
   await d.delete(reviews).where(eq(reviews.deckId, deckId)).run()
   await d.delete(words).where(eq(words.deckId, deckId)).run()
   await d.delete(decks).where(eq(decks.id, deckId)).run()
@@ -203,27 +204,110 @@ api.post('/reviews/:wordId/grade', async (c) => {
     .get()
   if (!review) return c.json({ error: 'not found' }, 404)
 
-  const updated = gradeReviewFields(review.fsrs, grade, new Date())
+  const now = Date.now()
+  const updated = gradeReviewFields(review.fsrs, grade, new Date(now))
   await d.update(reviews).set(updated).where(eq(reviews.wordId, wordId)).run()
+  await d
+    .insert(reviewLog)
+    .values({
+      id: crypto.randomUUID(),
+      userId: user.id,
+      deckId: review.deckId,
+      wordId,
+      rating: grade,
+      reviewedAt: now,
+    })
+    .run()
   return c.json({ wordId, ...updated })
 })
 
-/** Aggregate learning stats for the user (a "complex query" showcase). */
+const DAY = 86_400_000
+const dayKey = (ms: number) => new Date(ms).toISOString().slice(0, 10) // UTC YYYY-MM-DD
+
+/**
+ * Rich learning stats for the user: overview, FSRS state breakdown, streak,
+ * accuracy, 30-day activity, and a 7-day due forecast. Computed from two
+ * queries (current reviews + recent review log) and assembled in JS.
+ */
 api.get('/stats', async (c) => {
   const user = c.get('user')
   const now = Date.now()
-  const row = await db(c.env)
-    .select({
-      totalWords: sql<number>`count(*)`,
-      due: sql<number>`sum(case when ${reviews.reps} > 0 and ${reviews.due} <= ${now} then 1 else 0 end)`,
-      fresh: sql<number>`sum(case when ${reviews.reps} = 0 then 1 else 0 end)`,
-      learned: sql<number>`sum(case when ${reviews.reps} > 0 then 1 else 0 end)`,
-      lapses: sql<number>`coalesce(sum(${reviews.lapses}), 0)`,
-    })
-    .from(reviews)
-    .where(eq(reviews.userId, user.id))
-    .get()
-  return c.json(row ?? { totalWords: 0, due: 0, fresh: 0, learned: 0, lapses: 0 })
+  const d = db(c.env)
+
+  const [revRows, logRows] = await Promise.all([
+    d
+      .select({
+        due: reviews.due,
+        state: reviews.state,
+        reps: reviews.reps,
+        lapses: reviews.lapses,
+      })
+      .from(reviews)
+      .where(eq(reviews.userId, user.id))
+      .all(),
+    d
+      .select({ reviewedAt: reviewLog.reviewedAt, rating: reviewLog.rating })
+      .from(reviewLog)
+      .where(and(eq(reviewLog.userId, user.id), gte(reviewLog.reviewedAt, now - 180 * DAY)))
+      .all(),
+  ])
+
+  // Overview + state breakdown + due forecast, from current review rows.
+  const overview = { totalWords: revRows.length, fresh: 0, learned: 0, due: 0, lapses: 0 }
+  const byState = { new: 0, learning: 0, review: 0, relearning: 0 }
+  const forecastMap = new Map<string, number>()
+  for (const r of revRows) {
+    overview.lapses += r.lapses
+    if (r.reps === 0) overview.fresh++
+    else {
+      overview.learned++
+      if (r.due <= now) overview.due++
+    }
+    if (r.state === 0) byState.new++
+    else if (r.state === 1) byState.learning++
+    else if (r.state === 2) byState.review++
+    else if (r.state === 3) byState.relearning++
+    if (r.due > now) forecastMap.set(dayKey(r.due), (forecastMap.get(dayKey(r.due)) ?? 0) + 1)
+  }
+  const forecast = Array.from({ length: 7 }, (_, i) => {
+    const k = dayKey(now + (i + 1) * DAY)
+    return { date: k, count: forecastMap.get(k) ?? 0 }
+  })
+
+  // Activity / accuracy / streak, from the review log.
+  const perDay = new Map<string, { count: number; correct: number }>()
+  for (const l of logRows) {
+    const k = dayKey(l.reviewedAt)
+    const e = perDay.get(k) ?? { count: 0, correct: 0 }
+    e.count++
+    if (l.rating >= 3) e.correct++
+    perDay.set(k, e)
+  }
+  const activity = Array.from({ length: 30 }, (_, i) => {
+    const k = dayKey(now - (29 - i) * DAY)
+    return { date: k, count: perDay.get(k)?.count ?? 0 }
+  })
+  const todayKey = dayKey(now)
+  const reviewsToday = perDay.get(todayKey)?.count ?? 0
+  const sevenAgo = now - 7 * DAY
+  let reviews7d = 0
+  let correct = 0
+  for (const l of logRows) {
+    if (l.reviewedAt >= sevenAgo) reviews7d++
+    if (l.rating >= 3) correct++
+  }
+  const accuracy = logRows.length ? Math.round((correct / logRows.length) * 100) : 0
+
+  // Streak: consecutive days with ≥1 review, ending today (forgiving until
+  // end of day — if nothing today yet, count from yesterday).
+  let streak = 0
+  let cursor = perDay.has(todayKey) ? now : now - DAY
+  while (perDay.has(dayKey(cursor))) {
+    streak++
+    cursor -= DAY
+  }
+
+  return c.json({ overview, byState, forecast, activity, reviewsToday, reviews7d, accuracy, streak })
 })
 
 app.route('/api', api)
